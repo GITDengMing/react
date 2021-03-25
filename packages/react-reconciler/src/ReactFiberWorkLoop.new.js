@@ -132,12 +132,10 @@ import {
 import {
   NoLanePriority,
   SyncLanePriority,
-  SyncBatchedLanePriority,
   DefaultLanePriority,
   NoLanes,
   NoLane,
   SyncLane,
-  SyncBatchedLane,
   NoTimestamp,
   findUpdateLane,
   claimNextTransitionLane,
@@ -380,10 +378,6 @@ export function requestUpdateLane(fiber: Fiber): Lane {
   const mode = fiber.mode;
   if ((mode & ConcurrentMode) === NoMode) {
     return (SyncLane: Lane);
-  } else if ((mode & ConcurrentMode) === NoMode) {
-    return getCurrentUpdateLanePriority() === SyncLanePriority
-      ? (SyncLane: Lane)
-      : (SyncBatchedLane: Lane);
   } else if (
     !deferRenderPhaseUpdateToNextBatch &&
     (executionContext & RenderContext) !== NoContext &&
@@ -436,8 +430,11 @@ export function requestUpdateLane(fiber: Fiber): Lane {
 
   // This update originated outside React. Ask the host environement for an
   // appropriate priority, based on the type of event.
-  const eventLanePriority = getCurrentEventPriority();
-  return findUpdateLane(eventLanePriority);
+  //
+  // The opaque type returned by the host config is internally a lane, so we can
+  // use that directly.
+  const eventLane = getCurrentEventPriority();
+  return eventLane;
 }
 
 function requestRetryLane(fiber: Fiber) {
@@ -449,10 +446,6 @@ function requestRetryLane(fiber: Fiber) {
   const mode = fiber.mode;
   if ((mode & ConcurrentMode) === NoMode) {
     return (SyncLane: Lane);
-  } else if ((mode & ConcurrentMode) === NoMode) {
-    return getCurrentUpdateLanePriority() === SyncLanePriority
-      ? (SyncLane: Lane)
-      : (SyncBatchedLane: Lane);
   }
 
   // See `requestUpdateLane` for explanation of `currentEventWipLanes`
@@ -703,11 +696,6 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
       scheduleCallback(ImmediateSchedulerPriority, flushSyncCallbackQueue);
     }
     newCallbackNode = null;
-  } else if (newCallbackPriority === SyncBatchedLanePriority) {
-    newCallbackNode = scheduleCallback(
-      ImmediateSchedulerPriority,
-      performSyncWorkOnRoot.bind(null, root),
-    );
   } else {
     const schedulerPriorityLevel = lanePriorityToSchedulerPriority(
       newCallbackPriority,
